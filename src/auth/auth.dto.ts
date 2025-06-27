@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class LoginDTO {
     @IsString()
@@ -13,6 +13,9 @@ export class RegisterDTO extends LoginDTO {
     @IsString()
     @IsNotEmpty({ message: 'Este campo es requerido' })
     name: string;
+
+    @IsString()
+    method: 'email' | 'google' | 'apple'
 }
 
 export interface IToken {

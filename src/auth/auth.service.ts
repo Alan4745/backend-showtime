@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 import { LoginDTO, RegisterDTO } from './auth.dto';
 import * as bcrypt from 'bcrypt';
 import * as jwt from 'jsonwebtoken';
+
+import * as jwksClient from 'jwks-rsa';
 import { ConfigService } from '@nestjs/config';
 import { Model } from 'mongoose';
 import { InjectModel } from '@nestjs/mongoose';
@@ -21,9 +22,8 @@ export class AuthService {
 
     async login(login: LoginDTO) {
         const findUser = await this.usersModel.findOne({
-            email: login.email
+            'auth.email': login.email
         })
-
         if (!findUser) {
             return {
                 message: 'Usuario no encontrado.',
@@ -31,18 +31,26 @@ export class AuthService {
             }
         }
 
-        const isMatch = await bcrypt.compare(login.password, findUser.password.toString());
-        if (!isMatch) {
-            return {
-                message: "The password is incorrect.",
-                status: false,
+        if (findUser.auth.method == 'email') {
+            if (!findUser.auth || !findUser.auth.passwordHash) {
+                return {
+                    message: "No password set for this user.",
+                    status: false,
+                }
+            }
+            const isMatch = await bcrypt.compare(login.password, findUser.auth.passwordHash.toString());
+            if (!isMatch) {
+                return {
+                    message: "The password is incorrect.",
+                    status: false,
+                }
             }
         }
 
         const payload = {
             _id: findUser._id,
             name: findUser.name,
-            email: findUser.email,
+            email: findUser.auth.email,
             createdAt: findUser.createdAt,
         }
 
@@ -51,12 +59,145 @@ export class AuthService {
 
         return {
             token: token,
-            message: `Bienvenido ${findUser.name}`
+            message: `Bienvenido ${findUser.name}! Ya formas parte de nuestra comunidad.`
+        }
+    }
+
+    async googleLogin(idToken: string) {
+        // Configuración de tu dominio de Auth0
+        const AUTH0_DOMAIN = this.configService.get<string>('DOMINIO_AUTH0');
+
+        // Obtener clave pública
+        const client = jwksClient({
+            jwksUri: `https://${AUTH0_DOMAIN}/.well-known/jwks.json`
+        });
+
+        function getKey(header, callback) {
+            client.getSigningKey(header.kid, (err, key: any) => {
+                const signingKey = key.getPublicKey();
+                callback(null, signingKey);
+            });
+        }
+
+        const decoded = await new Promise((resolve, reject) => {
+            jwt.verify(idToken, getKey, {
+                audience: 'TU_CLIENT_ID_AUTH0', // este es el Client ID de Auth0
+                issuer: `https://${AUTH0_DOMAIN}/`,
+                algorithms: ['RS256']
+            }, (err, decoded) => {
+                if (err) return reject(err);
+                resolve(decoded);
+            });
+        });
+
+        const { email, sub, name } = decoded as any;
+
+        // Buscar usuario en DB
+        let user = await this.usersModel.findOne({ providerId: sub });
+
+        if (!user) {
+            user = new this.usersModel({
+                name,
+                auth: {
+                    email,
+                    providerId: sub,
+                    method: 'google'
+                },
+            });
+            await user.save();
+        }
+
+        const payload = {
+            _id: user._id,
+            name: user.name,
+            email: user.auth.email,
+            createdAt: user.createdAt,
+        }
+
+        const secretKey = this.configService.get<string>('JWT_SECRET') || '';
+        const token = jwt.sign(payload, secretKey, { expiresIn: '24h' });
+
+        return {
+            token,
+            message: `Bienvenido ${user.name}! Ya formas parte de nuestra comunidad.`,
+        };
+    }
+
+    async appleLogin(idToken: string) {
+        const AUTH0_DOMAIN = this.configService.get<string>('DOMINIO_AUTH0');
+        const AUTH0_CLIENT_ID = 'CLIENT_ID_DE_TU_APP';
+
+        const client = jwksClient({
+            jwksUri: `https://${AUTH0_DOMAIN}/.well-known/jwks.json`
+        });
+
+        function getKey(header, callback) {
+            client.getSigningKey(header.kid, (err, key: any) => {
+                const signingKey = key.getPublicKey();
+                callback(null, signingKey);
+            });
+        }
+
+        const decoded = await new Promise((resolve, reject) => {
+            jwt.verify(idToken, getKey, {
+                audience: AUTH0_CLIENT_ID,
+                issuer: `https://${AUTH0_DOMAIN}/`,
+                algorithms: ['RS256']
+            }, (err, decoded) => {
+                if (err) return reject(err);
+                resolve(decoded);
+            });
+        });
+
+        const { email, sub: providerId, name } = decoded as any;
+
+        // Buscar o crear el usuario
+        let user = await this.usersModel.findOne({ providerId });
+        if (!user) {
+            user = new this.usersModel({
+                name: name || 'Apple User',
+                auth: {
+                    email,
+                    providerId,
+                    method: 'apple'
+                },
+            });
+            await user.save();
+        }
+
+        const payload = {
+            _id: user._id,
+            name: user.name,
+            email: user.auth.email,
+            createdAt: user.createdAt,
+        }
+
+        const secretKey = this.configService.get<string>('JWT_SECRET') || '';
+        const token = jwt.sign(payload, secretKey, { expiresIn: '24h' });
+
+        return {
+            token,
+            message: `Bienvenido ${user.name}! Ya formas parte de nuestra comunidad.`,
+        };
+    }
+
+
+    async validateGoogleUser(googleUser: RegisterDTO) {
+        try {
+            const user = await this.usersModel.findOne({ 'auth.email': googleUser.email })
+
+            if (user) {
+                return await this.login(googleUser);
+            } else {
+                return await this.register(googleUser);
+            }
+        } catch (err) {
+            console.log(err);
         }
     }
 
     async register(register: RegisterDTO) {
-        const existingUser = await this.usersModel.findOne({ email: register.email });
+        const existingUser = await this.usersModel.findOne({ 'auth.email': register.email });
 
         if (existingUser) {
             return {
@@ -65,12 +206,16 @@ export class AuthService {
             }
         }
 
-        const passwordHash = await bcrypt.hash(register.password, 10);
+        const passwordHash = register.method == 'email' ? await bcrypt.hash(register.password, 10) : '';
 
         const newUsers = new this.usersModel({
             name: register.name,
-            email: register.email,
-            password: passwordHash
+            auth: {
+                email: register.email,
+                method: register.method,
+                passwordHash,
+                providerId: ''
+            }
         })
 
         newUsers.save();
@@ -78,7 +223,7 @@ export class AuthService {
         const payload = {
             _id: newUsers._id,
             name: newUsers.name,
-            email: newUsers.email,
+            email: newUsers.auth.email,
             createdAt: newUsers.createdAt,
         }
         const secretKey = this.configService.get<string>('JWT_SECRET') || '';
@@ -86,7 +231,21 @@ export class AuthService {
 
         return {
             token: token,
-            message: `Bienvenido ${newUsers.name}`
+            message: `Bienvenido ${newUsers.name}! Ya formas parte de nuestra comunidad.`
+        }
+    }
+
+
+    async validateOrCreateUser(data: RegisterDTO) {
+        let user = await this.usersModel.findOne({ 'auth.email': data.email });
+
+        if (user) {
+            return await this.login({
+                email: data.email,
+                password: data.password
+            })
+        } else {
+            return await this.register(data);
         }
     }
 }
