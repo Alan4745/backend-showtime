@@ -17,6 +17,9 @@ export class UsersService {
     }
 
     async getMeUsers(_id: string) {
-        return await this.usersModel.find({ _id }).exec()
+        return await this.usersModel
+        .findById({ _id })
+        .select('-auth.passwordHash')
+        .exec()
     }
 }

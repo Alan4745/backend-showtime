@@ -60,6 +60,7 @@ export class Soccer {
 
 const SoccerSchema = SchemaFactory.createForClass(Soccer);
 
+@Schema()
 export class ProfileData extends Document {
     @Prop()
     username: string;

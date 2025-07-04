@@ -181,7 +181,6 @@ export class AuthService {
         };
     }
 
-
     async validateGoogleUser(googleUser: RegisterDTO) {
         try {
             const user = await this.usersModel.findOne({ 'auth.email': googleUser.email })
@@ -208,30 +207,77 @@ export class AuthService {
 
         const passwordHash = register.method == 'email' ? await bcrypt.hash(register.password, 10) : '';
 
-        const newUsers = new this.usersModel({
+        const userData = {
             name: register.name,
             auth: {
                 email: register.email,
                 method: register.method,
                 passwordHash,
-                providerId: ''
+            },
+            profile: {
+                username: register.username,
+                gender: register.gender,
+                age: register.age,
+                citizenship: register.citizenship,
+                physical: {
+                    weightKg: register.weightKg,
+                    heightCm: register.heightCm,
+                    goal: register.goal,
+                },
+                soccer: {
+                    position: register.position,
+                    experienceLevel: register.experienceLevel,
+                    trainingFrequency: register.trainingFrequency,
+                    dominantFoot: register.dominantFoot,
+                },
+                preferences: {
+                    contentLikes: register.contentLikes,
+                    notificationsEnabled: register.notificationsEnabled,
+                }
+            },
+            meta: {
+                isActive: register.isActive,
+                lastLogin: register.lastLogin,
+                registeredAt: new Date()
+            },
+            plan: {
+                type: register.type,
+                price: register.price,
+                activatedAt: new Date()
             }
-        })
+        };
 
-        newUsers.save();
+        // Limpia los campos undefined
+        function clean(obj: any): any {
+            if (obj && typeof obj === 'object') {
+                Object.keys(obj).forEach(key => {
+                    const value = obj[key];
+                    if (
+                        value === undefined ||
+                        (typeof value === 'object' && clean(value) && Object.keys(value).length === 0)
+                    ) {
+                        delete obj[key];
+                    }
+                });
+            }
+            return obj;
+        }
+
+        const newUser = new this.usersModel(clean(userData));
+        await newUser.save();
 
         const payload = {
-            _id: newUsers._id,
-            name: newUsers.name,
-            email: newUsers.auth.email,
-            createdAt: newUsers.createdAt,
+            _id: newUser._id,
+            name: newUser.name,
+            email: newUser.auth.email,
+            createdAt: newUser.createdAt,
         }
         const secretKey = this.configService.get<string>('JWT_SECRET') || '';
         const token = jwt.sign(payload, secretKey, { expiresIn: '24h' });
 
         return {
             token: token,
-            message: `Bienvenido ${newUsers.name}! Ya formas parte de nuestra comunidad.`
+            message: `Bienvenido ${newUser.name}! Ya formas parte de nuestra comunidad.`
         }
     }
 
