@@ -28,9 +28,10 @@ export class UsersController {
     async saveInfoUser(@Req() req: Request) {
         return await this.userService.getMeUsers(req['user']._id);
     }
+
     @UseGuards(AuthGuard)
     @Put('/me')
     async updateInfoUser(@Req() req: Request) {
-        return await this.userService.getMeUsers(req['user']._id);
+        return await this.userService.updateMeUser(req['user']._id, req.body);
     }
 }
