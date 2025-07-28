@@ -16,7 +16,7 @@ export class RegisterDTO extends LoginDTO {
     name: string;
 
     @IsString()
-    method: 'email' | 'google' | 'apple';
+    authMethod: 'email' | 'google' | 'apple';
 
     // Profile
 
@@ -28,9 +28,13 @@ export class RegisterDTO extends LoginDTO {
     @IsOptional()
     gender: string;
 
-    @IsNumber()
+    // @IsNumber()
+    // @IsOptional()
+    // age: number;
+
+    @IsString()
     @IsOptional()
-    age: number;
+    birthdate: string;
 
     @IsString()
     @IsOptional()
@@ -40,15 +44,15 @@ export class RegisterDTO extends LoginDTO {
 
     @IsNumber()
     @IsOptional()
-    weightKg: number;
+    weight: number;
 
     @IsNumber()
     @IsOptional()
-    heightCm: number;
+    height: number;
 
     @IsString()
     @IsOptional()
-    goal: 'gain_muscle' | 'lose_fat' | 'maintain';
+    physicalGoal: 'gain_muscle' | 'lose_fat' | 'maintain';
 
     // Soccer
 
@@ -94,10 +98,15 @@ export class RegisterDTO extends LoginDTO {
     @IsString()
     @IsOptional()
     type: string;
-
+    
     @IsNumber()
     @IsOptional()
     price: number;
+
+
+    @IsString()
+    @IsOptional()
+    appDiscoverySource: string;
 }
 
 export interface IToken {

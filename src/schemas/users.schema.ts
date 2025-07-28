@@ -73,6 +73,10 @@ export class ProfileData extends Document {
 
     @Prop()
     citizenship: string;
+    @Prop()
+    birthdate: string;
+    @Prop()
+    appDiscoverySource: string;
 
     @Prop({ type: PhysicalSchema })
     physical: Physical;

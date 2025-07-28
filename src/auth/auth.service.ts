@@ -205,24 +205,26 @@ export class AuthService {
             }
         }
 
-        const passwordHash = register.method == 'email' ? await bcrypt.hash(register.password, 10) : '';
+        const passwordHash = register.authMethod == 'email' ? await bcrypt.hash(register.password, 10) : '';
 
         const userData = {
             name: register.name,
             auth: {
                 email: register.email,
-                method: register.method,
+                method: register.authMethod,
                 passwordHash,
             },
             profile: {
                 username: register.username,
                 gender: register.gender,
-                age: register.age,
+                age: 0,
+                birthdate: register.birthdate,
+                appDiscoverySource: register.appDiscoverySource,
                 citizenship: register.citizenship,
                 physical: {
-                    weightKg: register.weightKg,
-                    heightCm: register.heightCm,
-                    goal: register.goal,
+                    weightKg: register.weight,
+                    heightCm: register.height,
+                    goal: register.physicalGoal,
                 },
                 soccer: {
                     position: register.position,

@@ -13,6 +13,7 @@ import { GoogleStrategy } from './strategies/google.strategies';
     MongooseModule.forRoot(process.env.MONGO_URI ?? ''),
     AuthModule,
     UsersModule,
+    AppModule,
   ],
   controllers: [AppController],
   providers: [AppService, GoogleStrategy],
